@@ -1,7 +1,8 @@
-require "GGPrediction"
 require "DamageLib"
 require "2DGeometry"
 require "MapPositionGOS"
+require "GGPrediction"
+require "PremiumPrediction"
 
 
 local EnemyHeroes = {}
@@ -9,54 +10,79 @@ local AllyHeroes = {}
 local EnemySpawnPos = nil
 local AllySpawnPos = nil
 
---do--
+--[[ AutoUpdate deactivated until proper rank.
+do
     
-    --local Version = 1.4
+    local Version = 1.0
     
-    --local Files = {
-        --Lua = {
-            --Path = SCRIPT_PATH,
-            --Name = "dnsSupports.lua",
-            --Url = "https://raw.githubusercontent.com/fkndns/dnsSupports/main/dnsSupports.lua"
-       --},
-        --Version = {
-            --Path = SCRIPT_PATH,
-            --Name = "dnsSupports.version",
-            --Url = "https://raw.githubusercontent.com/fkndns/dnsSupports/main/dnsSupports.version"    -- check if Raw Adress correct pls.. after you have create the version file on Github
-        --}
-    --}
+    local Files = {
+        Lua = {
+            Path = SCRIPT_PATH,
+            Name = "dnsMages.lua",
+            Url = "https://raw.githubusercontent.com/fkndns/dnsMages/main/dnsMages.lua"
+       },
+        Version = {
+            Path = SCRIPT_PATH,
+            Name = "dnsActivator.version",
+            Url = "https://raw.githubusercontent.com/fkndns/dnsMages/main/dnsMages.version"    -- check if Raw Adress correct pls.. after you have create the version file on Github
+        }
+    }
     
-    --local function AutoUpdate()
+    local function AutoUpdate()
         
-        --local function DownloadFile(url, path, fileName)
-            --DownloadFileAsync(url, path .. fileName, function() end)
-            --while not FileExist(path .. fileName) do end
-        --end
+        local function DownloadFile(url, path, fileName)
+            DownloadFileAsync(url, path .. fileName, function() end)
+            while not FileExist(path .. fileName) do end
+        end
         
-        --local function ReadFile(path, fileName)
-            --local file = io.open(path .. fileName, "r")
-            --local result = file:read()
-            --file:close()
-            --return result
-        --end
+        local function ReadFile(path, fileName)
+            local file = io.open(path .. fileName, "r")
+            local result = file:read()
+            file:close()
+            return result
+        end
         
-        --DownloadFile(Files.Version.Url, Files.Version.Path, Files.Version.Name)
-        --local textPos = myHero.pos:To2D()
-        --local NewVersion = tonumber(ReadFile(Files.Version.Path, Files.Version.Name))
-        --if NewVersion > Version then
-            --DownloadFile(Files.Lua.Url, Files.Lua.Path, Files.Lua.Name)
-            --print("New dnsMarksmen Version. Press 2x F6")     -- <-- you can change the massage for users here !!!!
-        --else
-            --print(Files.Version.Name .. ": No Updates Found")   --  <-- here too
-        --end
+        DownloadFile(Files.Version.Url, Files.Version.Path, Files.Version.Name)
+        local textPos = myHero.pos:To2D()
+        local NewVersion = tonumber(ReadFile(Files.Version.Path, Files.Version.Name))
+        if NewVersion > Version then
+            DownloadFile(Files.Lua.Url, Files.Lua.Path, Files.Lua.Name)
+            print("New dnsMarksmen Version. Press 2x F6")     -- <-- you can change the massage for users here !!!!
+        else
+            print(Files.Version.Name .. ": No Updates Found")   --  <-- here too
+        end
     
-    --end
+    end
     
-    --AutoUpdate()
+    AutoUpdate()
 
---end --
+end 
+--]]
 
 local ItemHotKey = {[ITEM_1] = HK_ITEM_1, [ITEM_2] = HK_ITEM_2,[ITEM_3] = HK_ITEM_3, [ITEM_4] = HK_ITEM_4, [ITEM_5] = HK_ITEM_5, [ITEM_6] = HK_ITEM_6,}
+
+local InterruptSpells = {
+    ["Caitlyn"] = {"CaitlynAceintheHole"},
+    ["FiddleSticks"] = {"Crowstorm"},
+    ["FiddleSticks"] = {"DrainChannel"},
+    ["Galio"] = {"GalioIdolOfDurand"},
+    ["Janna"] = {"ReapTheWhirlwind"},
+    ["Karthus"] = {"KarthusFallenOne"},
+    ["Katarina"] = {"KatarinaR"},
+    ["Lucian"] = {"LucianR"},
+    ["Malzahar"] = {"AlZaharNetherGrasp"},
+    ["MasterYi"] = {"Meditate"},
+    ["MissFortune"] = {"MissFortuneBulletTime"},
+    ["Nunu"] = {"NunuR"},
+    ["Pantheon"] = {"PantheonRJump"},
+    ["Pantheon"] = {"PantheonRFall"},
+    ["Shen"] = {"ShenStandUnited"},
+    ["TwistedFate"] = {"Destiny"},
+    ["Urgot"] = {"UrgotSwap2"},
+    ["Velkoz"] = {"VelkozR"},
+    ["Warwick"] = {"WarwickR"},
+    ["Xerath"] = {"XerathLocusOfPower2"}
+}
 
 local function GetInventorySlotItem(itemID)
     assert(type(itemID) == "number", "GetInventorySlotItem: wrong argument types (<number> expected)")
@@ -297,6 +323,24 @@ function GetTarget(range)
     end
 end
 
+function CalcRDmg(unit)
+    local Damage = 0
+    local Distance = GetDistance(myHero.pos, unit.pos)
+    local MathDist = math.floor(math.floor(Distance)/100)   
+    local level = myHero:GetSpellData(_R).level
+    local BaseQ = ({25, 35, 45})[level] + 0.15 * myHero.bonusDamage
+    local QMissHeal = ({25, 30, 35})[level] / 100 * (unit.maxHealth - unit.health)
+    local dist = myHero.pos:DistanceTo(unit.pos)
+    if Distance < 100 then
+        Damage = BaseQ + QMissHeal
+    elseif Distance >= 1500 then
+        Damage = BaseQ * 10 + QMissHeal     
+    else
+        Damage = ((((MathDist * 6) + 10) / 100) * BaseQ) + BaseQ + QMissHeal
+    end
+    return CalcPhysicalDamage(myHero, unit, Damage)
+end
+
 function GotBuff(unit, buffname)
     for i = 0, unit.buffCount do
         local buff = unit:GetBuff(i)
@@ -391,10 +435,6 @@ local function CheckHPPred(unit, SpellSpeed)
     end
 end
 
-function EnableMovement()
-    SetMovement(true)
-end
-
 local function IsValid(unit)
     if (unit and unit.valid and unit.isTargetable and unit.alive and unit.visible and unit.networkID and unit.pathing and unit.health > 0) then
         return true;
@@ -458,6 +498,40 @@ local function GetAllyCount(range, pos)
     return count
 end
 
+local function GetMinionCount(checkrange, range, pos)
+    local minions = _G.SDK.ObjectManager:GetEnemyMinions(checkrange)
+    local pos = pos.pos
+    local count = 0
+    for i = 1, #minions do 
+        local minion = minions[i]
+        local Range = range * range
+        if GetDistanceSqr(pos, minion.pos) < Range and IsValid(minion) then
+            count = count + 1
+        end
+    end
+    return count
+end
+
+local function dnsTargetSelector(unit, range)
+    local fullDamUnit = (unit.totalDamage + unit.ap * 0.7)
+    local healthPercentUnit = (unit.health / unit.maxHealth)
+    local unitStrength = fullDamUnit / healthPercentUnit
+    local dtarget = nil
+    if dtarget ~= nil then
+        local fullDamdtarget = (dtarget.totalDamage + dtarget.ap * 0.7) 
+        local healthPercentdtarget = (dtarget.health / dtarget.maxHealth) 
+        local dtargetStrength = fullDamdtarget / healthPercentdtarget
+    end
+    if ValidTarget(unit, range) then
+        --PrintChat("target")
+        if dtarget == nil or unitStrength > dtargetStrength then
+            dtarget = unit
+            PrintChat(dtarget.charName)
+        end
+    end
+    return dtarget
+end
+
 function GetTurretShot(unit)
     local turrets = _G.SDK.ObjectManager:GetTurrets(GetDistance(unit.pos) + 1000)
     for i = 1, #turrets do
@@ -471,19 +545,63 @@ function GetTurretShot(unit)
     end
 end
 
-local function MMCast(pos, spell)
-        local MMSpot = Vector(pos):ToMM()
-        local MouseSpotBefore = mousePos
-        Control.SetCursorPos(MMSpot.x, MMSpot.y)
-        Control.KeyDown(spell); Control.KeyUp(spell)
-        DelayAction(function() Control.SetCursorPos(MouseSpotBefore) end, 0.20)
+local function CustomCastMM(spell,pos)
+    local MMSpot = Vector(pos):ToMM()
+    local MouseSpotBefore = mousePos
+    Control.SetCursorPos(MMSpot.x, MMSpot.y)
+    Control.KeyDown(spell); Control.KeyUp(spell)
+    DelayAction(function() Control.SetCursorPos(MouseSpotBefore) end, 0.20)
 end
+
+local function HitChanceConvert(menVal)
+    if menVal == 1 then
+        return 0
+    elseif menVal == 2 then 
+        return 0.25
+    elseif menVal == 3 then
+        return 0.5
+    elseif menVal == 4 then
+        return 0.75
+    elseif menVal == 5 then
+        return 1
+    end
+end
+
+function GGCast(spell, target, spellprediction, hitchance)
+        if not (target or spellprediction) then
+            return false
+        end
+        if spellprediction == nil then
+            if target == nil then
+                Control.KeyDown(spell)
+                Control.KeyUp(spell)
+                return true
+            end
+            _G.Control.CastSpell(spell, target)
+            return true
+        end
+        if target == nil then
+            return false
+        end
+        spellprediction:GetPrediction(target, myHero)
+        if spellprediction:CanHit(hitchance or HITCHANCE_HIGH) and GetDistance(spellprediction.CastPosition, myHero.pos) < spellprediction.Range and GetDistance(spellprediction.CastPosition, target.pos) < 250 then
+            _G.Control.CastSpell(spell, spellprediction.CastPosition)
+            return true
+        end
+        return false
+    end
 
 class "Manager"
 
 function Manager:__init()
     if myHero.charName == "Lulu" then
         DelayAction(function () self:LoadLulu() end, 1.05)
+    end
+    if myHero.charName == "Nami" then
+        DelayAction(function() self:LoadNami() end, 1.05)
+    end
+    if myHero.charName == "Soraka" then
+        DelayAction(function() self:LoadSoraka() end, 1.05)
     end
 end
 
@@ -492,6 +610,20 @@ function Manager:LoadLulu()
     Lulu:Menu()
     Callback.Add("Tick", function() Lulu:Tick() end)
     Callback.Add("Draw", function() Lulu:Draws() end)
+end
+
+function Manager:LoadNami()
+    Nami:Spells()
+    Nami:Menu()
+    Callback.Add("Tick", function() Nami:Tick() end)
+    Callback.Add("Draw", function() Nami:Draws() end)
+end
+
+function Manager:LoadSoraka()
+    Soraka:Spells()
+    Soraka:Menu()
+    Callback.Add("Tick", function() Soraka:Tick() end)
+    Callback.Add("Draw", function() Soraka:Draws() end)
 end
 
 class "Lulu"
@@ -519,7 +651,8 @@ local WBuffs = {
 
 local EnemyLoaded = false
 local AllyLoaded = false
-
+local ComboTimer = nil
+local Timer = Game.Timer()
 -- Icons
 local ChampIcon = "https://www.proguides.com/public/media/rlocal/champion/thumbnail/117.png"
 local QIcon = "https://www.proguides.com/public/media/rlocal/champion/ability/thumbnail/LuluQ.png"
@@ -542,7 +675,7 @@ function Lulu:Menu()
     -- combo
     self.Menu:MenuElement({id = "combo", name = "Combo", type = MENU})
     self.Menu.combo:MenuElement({id = "qcombo", name = "Use [Q] in Combo", value = true, leftIcon = QIcon})
-    self.Menu.combo:MenuElement({id = "qcombohc", name = "[Q] HitChance", value = 2, drop = {"Normal", "High", "Immobile"}, leftIcon = QIcon})
+    self.Menu.combo:MenuElement({id = "qcombohc", name = "[Q] HitChance", value = 0.15, min = 0, max = 1, step = 0.05, leftIcon = QIcon})
     self.Menu.combo:MenuElement({id = "wcombo", name = "Use [W] in Combo", value = true, leftIcon = WIcon})
     self.Menu.combo:MenuElement({id = "rcombo", name = "Use [R] in Combo", value = true, leftIcon = RIcon})
     self.Menu.combo:MenuElement({id = "rcombocount", name = "[R] HitCount", value = 3, min = 1, max = 5, step = 1, leftIcon = RIcon})
@@ -588,7 +721,7 @@ function Lulu:Draws()
 end
 
 function Lulu:Spells()
-    QSpell = GGPrediction:SpellPrediction({Delay = 0.25, Radius = 80, Range = QRange, Speed = 1400, Collision = false, Type = GGPrediction.SPELLTYPE_LINE})
+    Q = {range = 925, delay = 0.25, radius = 30, speed = 1400, collision = {}, type = "linear"}
 end
 
 function Lulu:Tick()
@@ -636,6 +769,14 @@ function Lulu:CastingChecks()
     end
 end
 
+function Lulu:SmoothChecks()
+    if self:CastingChecks() and _G.SDK.Cursor.Step == 0 and _G.SDK.Spell:CanTakeAction({q = 0.33, w = 0.33, e = 0.13, r = 0.13}) then
+        return true
+    else 
+        return false
+    end
+end
+
 function Lulu:CanUse(spell, mode)
     if mode == nil then
         mode = Mode()
@@ -673,6 +814,7 @@ function Lulu:CanUse(spell, mode)
             return true
         end
     end
+    return false
 end
 
 
@@ -710,72 +852,72 @@ end
 -- [functions] --
 
 function Lulu:ComboQ()
-    local qtarget = GetTarget(QRange)
-    if ValidTarget(qtarget, QRange) and self:CanUse(_Q, "Combo") and self:CastingChecks() and myHero.attackData.state ~= 2 then
-        QSpell:GetPrediction(qtarget, myHero)
-        if QSpell:CanHit(self.Menu.combo.qcombohc:Value() + 1) then
-            Control.CastSpell(HK_Q, QSpell.CastPosition)
+    local qtarget = GetTarget(Q.range)
+    if ValidTarget(qtarget, Q.range) and self:CanUse(_Q, "Combo") and self:SmoothChecks() then
+        local pred = _G.PremiumPrediction:GetPrediction(myHero, qtarget, Q)
+        if pred.CastPos and pred.HitChance >= self.Menu.combo.qcombohc:Value() and GetDistance(pred.CastPos, myHero.pos) <= Q.range then
+            _G.Control.CastSpell(HK_Q, pred.CastPos)
         end
     end
 end
 
 function Lulu:ComboR(enemy, ally) 
-    if ValidTarget(ally, RRange) and self:CanUse(_R, "Combo") and self:CastingChecks() and myHero.attackData.state ~= 2 and self.Menu.combo.rcomboallies[ally.charName]:Value() and GetEnemyCount(250, ally) >= self.Menu.combo.rcombocount:Value() then
-        Control.CastSpell(HK_R, ally)
+    if ValidTarget(ally, RRange) and self:CanUse(_R, "Combo") and self:SmoothChecks() and self.Menu.combo.rcomboallies[ally.charName]:Value() and GetEnemyCount(250, ally) >= self.Menu.combo.rcombocount:Value() then
+        GGCast(HK_R, ally)
     end
 end
 
 function Lulu:QKS(enemy)
-    if ValidTarget(enemy, QRange) and self:CanUse(_Q, "KS") and self:CastingChecks() and myHero.attackData.state ~= 2 then
+    if ValidTarget(enemy, QRange) and self:CanUse(_Q, "KS") and self:SmoothChecks() then
         local QDam = getdmg("Q", enemy, myHero, myHero:GetSpellData(_Q).level)
         if enemy.health <= QDam then
-            QSpell:GetPrediction(enemy, myHero)
-            if QSpell:CanHit(HITCHANCE_HIGH) then
-                Control.CastSpell(HK_Q, QSpell.CastPosition)
+            local pred = _G.PremiumPrediction:GetPrediction(myHero, enemy, Q)
+            if pred.CastPos and pred.HitChance >= 0.15 and GetDistance(pred.CastPos, myHero.pos) <= Q.range then
+                _G.Control.CastSpell(HK_Q, pred.CastPos)
             end
         end
     end
 end
 
 function Lulu:WComboSelf(enemy)
-    if ValidTarget(enemy, WRange) and self:CanUse(_W, "Combo") and self:CastingChecks() and myHero.attackData.state ~= 2 and enemy.activeSpell.valid and not enemy.activeSpell.isStopped then
+    if ValidTarget(enemy, WRange) and self:CanUse(_W, "Combo") and self:SmoothChecks() and enemy.activeSpell.valid and not enemy.activeSpell.isStopped then
         if enemy.activeSpell.target == myHero.handle then
-            Control.CastSpell(HK_W, enemy)
+            GGCast(HK_W, enemy)
         else
             local placementPos = enemy.activeSpell.placementPos
-            local width = myHero.boundingRadius + 50
+            local width = myHero.boundingRadius + 75
             if enemy.activeSpell.width > 0 then width = width + enemy.activeSpell.width end
             local spellLine = ClosestPointOnLineSegment(myHero.pos, enemy.pos, placementPos)
             if GetDistance(myHero.pos, spellLine) <= width then
-                Control.CastSpell(HK_W, enemy)
+                GGCast(HK_W, enemy)
             end
         end
     end
 end
 
 function Lulu:WComboAlly(enemy, ally)
-    if ValidTarget(ally) and ValidTarget(enemy, WRange) and self:CanUse(_W, "Combo") and self:CastingChecks() and myHero.attackData.state ~= 2 and enemy.activeSpell.valid and not enemy.activeSpell.isStopped then
+    if ValidTarget(ally) and ValidTarget(enemy, WRange) and self:CanUse(_W, "Combo") and self:SmoothChecks() and enemy.activeSpell.valid and not enemy.activeSpell.isStopped then
         if enemy.activeSpell.target == ally.handle then
-            Control.CastSpell(HK_W, enemy)
+            GGCast(HK_W, enemy)
         else
             local placementPos = enemy.activeSpell.placementPos
-            local width = ally.boundingRadius + 50
+            local width = ally.boundingRadius + 75
             if enemy.activeSpell.width > 0 then width = width + enemy.activeSpell.width end
             local spellLine = ClosestPointOnLineSegment(ally.pos, enemy.pos, placementPos)
             if GetDistance(ally.pos, spellLine) <= width then
-                Control.CastSpell(HK_W, enemy)
+                GGCast(HK_W, enemy)
             end
         end
     end
 end
 
 function Lulu:WBuff(ally)
-    if ValidTarget(ally, WRange) and self:CanUse(_W, "Buff") and self:CastingChecks() and myHero.attackData.state ~= 2 and ally.activeSpell.valid then
+    if ValidTarget(ally, WRange) and self:CanUse(_W, "Buff") and self:SmoothChecks() and ally.activeSpell.valid then
         local t = WBuffs[ally.charName] 
         if t then
             for i = 1, #t do
                 if ally.activeSpell.name == t[i] then
-                    Control.CastSpell(HK_W, ally)
+                    GGCast(HK_W, ally)
                 end
             end
         end
@@ -784,93 +926,442 @@ end
 
 function Lulu:WInterrupt(enemy)
     local Timer = Game.Timer()
-    if ValidTarget(enemy, WRange) and self:CanUse(_W, "Interrupt") and self:CastingChecks() and myHero.attackData.state ~= 2 and enemy.activeSpell.valid and not enemy.activeSpell.isStopped and enemy.activeSpell.castEndTime - Timer > 0.4 then
-        Control.CastSpell(HK_W, enemy)
+    if ValidTarget(enemy, WRange) and self:CanUse(_W, "Interrupt") and self:SmoothChecks() and enemy.activeSpell.valid and not enemy.activeSpell.isStopped then
+        local t = InterruptSpells[enemy.charName]
+        if t then
+            for i = 1, #t do
+                if enemy.activeSpell.name == t[i] and enemy.activeSpell.castEndTime - Timer > 0.33 then
+                    GGCast(HK_W, enemy)
+                end
+            end
+        end
     end
 end
 
 function Lulu:WDash(enemy)
-    if ValidTarget(enemy, WRange) and self:CanUse(_W, "Interrupt") and self:CastingChecks() and myHero.attackData.state ~= 2 then
+    if ValidTarget(enemy, WRange) and self:CanUse(_W, "Interrupt") and self:SmoothChecks() then
         if enemy.pathing.isDashing then
             if GetDistance(myHero.pos, enemy.pathing.endPos) < GetDistance(myHero.pos, enemy.pos) then
-                Control.CastSpell(HK_W, enemy)
+                GGCast(HK_W, enemy)
             end
         end
     end
 end
 
 function Lulu:EShieldAlly(enemy, ally)
-    if ValidTarget(ally, ERange) and self:CanUse(_E, "Auto") and self:CastingChecks() and myHero.attackData.state ~= 2 and self.Menu.auto.eautoallies[ally.charName]:Value() and enemy.activeSpell.valid and not enemy.activeSpell.isStopped and ally.health / ally.maxHealth <= self.Menu.auto.eautohp:Value() / 100 then
+    if ValidTarget(ally, ERange) and self:CanUse(_E, "Auto") and self:SmoothChecks() and self.Menu.auto.eautoallies[ally.charName]:Value() and enemy.activeSpell.valid and not enemy.activeSpell.isStopped and ally.health / ally.maxHealth <= self.Menu.auto.eautohp:Value() / 100 then
         if enemy.activeSpell.target == ally.handle then
-            Control.CastSpell(HK_E, ally)
+            GGCast(HK_E, ally)
         else
             local placementPos = enemy.activeSpell.placementPos
             local width = ally.boundingRadius + 50
             if enemy.activeSpell.width > 0 then width = width + enemy.activeSpell.width end
             local spellLine = ClosestPointOnLineSegment(ally.pos, enemy.pos, placementPos)
             if GetDistance(ally.pos, spellLine) <= width then
-                Control.CastSpell(HK_E, ally)
+                GGCast(HK_E, ally)
             end
         end
     end
 end
 
 function Lulu:EShieldSelf(enemy)
-    if ValidTarget(enemy) and self:CanUse(_E, "Auto") and self:CastingChecks() and myHero.attackData.state ~= 2 and enemy.activeSpell.valid and not enemy.activeSpell.isStopped and myHero.health / myHero.maxHealth <= self.Menu.auto.eautohp:Value() / 100 then
+    if ValidTarget(enemy) and self:CanUse(_E, "Auto") and self:SmoothChecks() and enemy.activeSpell.valid and not enemy.activeSpell.isStopped and myHero.health / myHero.maxHealth <= self.Menu.auto.eautohp:Value() / 100 then
         if enemy.activeSpell.target == myHero.handle then
-            Control.CastSpell(HK_E, myHero)
+            GGCast(HK_E, myHero)
         else
             local placementPos = enemy.activeSpell.placementPos
             local width = myHero.boundingRadius + 50
             if enemy.activeSpell.width > 0 then width = width + enemy.activeSpell.width end
             local spellLine = ClosestPointOnLineSegment(myHero.pos, enemy.pos, placementPos)
             if GetDistance(myHero.pos, spellLine) <= width then
-                Control.CastSpell(HK_E, myHero)
+                GGCast(HK_E, myHero)
             end
         end
     end
 end
 
 function Lulu:TurretShield()
-    if self:CanUse(_E, "Auto") and GetTurretShot(myHero) and self:CastingChecks() and myHero.attackData.state ~= 2 and myHero.health / myHero.maxHealth <= self.Menu.auto.eautohp:Value() / 100 then
-        Control.CastSpell(HK_E, myHero)
+    if self:CanUse(_E, "Auto") and GetTurretShot(myHero) and self:SmoothChecks() and myHero.health / myHero.maxHealth <= self.Menu.auto.eautohp:Value() / 100 then
+        GGCast(HK_E, myHero)
     end
 end
 
 function Lulu:TurretShieldAlly(ally)
-    if ValidTarget(ally, ERange) and self:CanUse(_E, "Auto") and GetTurretShot(ally) and self:CastingChecks() and myHero.attackData.state ~= 2 and ally.health / ally.maxHealth <= self.Menu.auto.eautohp:Value() / 100 then
-        Control.CastSpell(HK_E, ally)
+    if ValidTarget(ally, ERange) and self:CanUse(_E, "Auto") and GetTurretShot(ally) and self:SmoothChecks() and ally.health / ally.maxHealth <= self.Menu.auto.eautohp:Value() / 100 then
+        GGCast(HK_E, ally)
     end
 end
 
 function Lulu:RShieldSelf(enemy)
-    if ValidTarget(enemy) and self:CanUse(_R, "Auto") and self:CastingChecks() and myHero.attackData.state ~= 2 and enemy.activeSpell.valid and not enemy.activeSpell.isStopped and myHero.health / myHero.maxHealth <= self.Menu.auto.rautohp:Value() / 100 then
+    if ValidTarget(enemy) and self:CanUse(_R, "Auto") and self:SmoothChecks() and enemy.activeSpell.valid and not enemy.activeSpell.isStopped and myHero.health / myHero.maxHealth <= self.Menu.auto.rautohp:Value() / 100 then
         if enemy.activeSpell.target == myHero.handle then
-            Control.CastSpell(HK_R, myHero)
+            GGCast(HK_R, myHero)
         else
             local placementPos = enemy.activeSpell.placementPos
             local width = myHero.boundingRadius + 50
             if enemy.activeSpell.width > 0 then width = width + enemy.activeSpell.width end
             local spellLine = ClosestPointOnLineSegment(myHero.pos, enemy.pos, placementPos)
             if GetDistance(myHero.pos, spellLine) <= width then
-                Control.CastSpell(HK_R, myHero)
+                GGCast(HK_R, myHero)
             end
         end
     end
 end
 
 function Lulu:RShieldAlly(enemy, ally)
-    if ValidTarget(ally, RRange) and self:CanUse(_R, "Auto") and self:CastingChecks() and myHero.attackData.state ~= 2 and self.Menu.auto.rautoallies[ally.charName]:Value() and enemy.activeSpell.valid and not enemy.activeSpell.isStopped and ally.health / ally.maxHealth <= self.Menu.auto.rautohp:Value() / 100 then
+    if ValidTarget(ally, RRange) and self:CanUse(_R, "Auto") and self:SmoothChecks() and self.Menu.auto.rautoallies[ally.charName]:Value() and enemy.activeSpell.valid and not enemy.activeSpell.isStopped and ally.health / ally.maxHealth <= self.Menu.auto.rautohp:Value() / 100 then
         if enemy.activeSpell.target == ally.handle then
-            Control.CastSpell(HK_R, ally)
+            GGCast(HK_R, ally)
         else
             local placementPos = enemy.activeSpell.placementPos
             local width = ally.boundingRadius + 50
             if enemy.activeSpell.width > 0 then width = width + enemy.activeSpell.width end
             local spellLine = ClosestPointOnLineSegment(ally.pos, enemy.pos, placementPos)
             if GetDistance(ally.pos, spellLine) <= width then
-                Control.CastSpell(HK_R, ally)
+                GGCast(HK_R, ally)
             end
+        end
+    end
+end
+
+class "Nami"
+
+local EnemyLoaded = false
+local AllyLoaded = false
+local Timer = Game.Timer()
+local ComboTimer = nil
+
+local AARange = 550
+local QRange = 875
+local WRange = 725
+local ERange = 800
+local RRange = 2750
+
+local RCount = nil
+
+function Nami:Menu()
+    self.Menu = MenuElement({type = MENU, id = "nami", name = "dnsNami"})
+
+    -- combo
+    self.Menu:MenuElement({id = "combo", name = "Combo", type = MENU})
+    self.Menu.combo:MenuElement({id = "qcombo", name = "Use [Q] in Combo", value = true})
+    self.Menu.combo:MenuElement({id = "qcombohc", name = "[Q] HitChance", value = 0.15, min = 0, max = 1, step = 0.05})
+    self.Menu.combo:MenuElement({id = "wcombo", name = "Use [W] on Enemy in Combo", value = true})
+    self.Menu.combo:MenuElement({id = "ecombo", name = "Use [E] on Self in Combo", value = true})
+    self.Menu.combo:MenuElement({id = "rcombo", name = "Use [R] in Combo", value = true})
+    self.Menu.combo:MenuElement({id = "rcombohc", name = "[R] HitChance", value = 0.15, min = 0, max = 1, step = 0.05})
+    self.Menu.combo:MenuElement({id = "rcombocount", name = "[R] HitCount", value = 3, min = 1, max = 5, step = 1})
+    self.Menu.combo:MenuElement({id = "rsemi", name = "Semi [R] Key", key = string.byte("T"), toggle = false})
+
+    -- auto 
+    self.Menu:MenuElement({id = "auto", name = "Auto", type = MENU})
+    self.Menu.auto:MenuElement({id = "qauto", name = "Auto [Q] immobile Targets", value = true})
+    self.Menu.auto:MenuElement({id = "qauto2", name = "Auto [Q] dashing Targets", value = true})
+    self.Menu.auto:MenuElement({id = "qauto3", name = "Auto [Q] Interrupt", value = true})
+    self.Menu.auto:MenuElement({id = "wauto", name = "Auto [W] low life Allies / Self"})
+    self.Menu.auto:MenuElement({id = "wautohp", name = "[W] HP", value = 60, min = 5, max = 95, step = 5, identifier = "%"})
+    self.Menu.auto:MenuElement({id = "wautoallies", name = "Use [W] on:", type = MENU})
+    self.Menu.auto:MenuElement({id = "eauto", name = "Auto [E] on fighting Allies", value = true})
+    self.Menu.auto:MenuElement({id = "eautoallies", name = "Use [E] on:", type = MENU})
+
+    -- draws
+    self.Menu:MenuElement({id = "draws", name = "Draws", type = MENU})
+    self.Menu.draws:MenuElement({id = "qdraw", name = "Draw [Q] Range", value = false})
+    self.Menu.draws:MenuElement({id = "wdraw", name = "Draw [W] Range", value = false})
+    self.Menu.draws:MenuElement({id = "edraw", name = "Draw [E] Range", value = false})
+    self.Menu.draws:MenuElement({id = "rdraw", name = "Draw [R] Range", value = false})
+
+end
+
+function Nami:ActiveMenu()
+    for i, ally in pairs(AllyHeroes) do
+        self.Menu.auto.wautoallies:MenuElement({id = ally.charName, name = ally.charName, value = true})
+        self.Menu.auto.eautoallies:MenuElement({id = ally.charName, name = ally.charName, value = true})
+    end
+end
+
+function Nami:Spells()
+    Q = {speed = math.huge, delay = 1.25, radius = 30, range = 875, collision = {}, type = "circular"}
+    R = {speed = 850, delay = 0.25, radius = 50, range = 2750, collision = {}, type = "linear"}
+end
+
+function Nami:Draws()
+    if self.Menu.draws.qdraw:Value() then
+        Draw.Circle(myHero, QRange, 2, Draw.Color(255, 255, 255, 0))
+    end
+    if self.Menu.draws.wdraw:Value() then
+        Draw.Circle(myHero, WRange, 2, Draw.Color(255, 255, 0, 0))
+    end
+    if self.Menu.draws.edraw:Value() then
+        Draw.Circle(myHero, ERange, 2, Draw.Color(255, 0, 255, 0))
+    end
+    if self.Menu.draws.rdraw:Value() then
+        Draw.Circle(myHero, RRange, 2, Draw.Color(255, 255, 0, 255))
+    end
+end
+
+function Nami:Tick()
+    if _G.JustEvade and _G.JustEvade:Evading() or (_G.ExtLibEvade and _G.ExtLibEvade.Evading) or Game.IsChatOpen() or myHero.dead then return end
+    _G.SDK.Spell:CanTakeAction({q = 0.33, w = 0.33, e = 0.13, r = 0.63})
+    target = GetTarget(AARange)
+    CastingQ = myHero.activeSpell.name == "NamiQ"
+    CastingW = myHero.activeSpell.name == "NamiW"
+    CastingE = myHero.activeSpell.name == "NamiE"
+    CastingR = myHero.activeSpell.name == "NamiR"
+    if EnemyLoaded == false then
+        local CountEnemy = 0
+        for i, enemy in pairs(EnemyHeroes) do
+            CountEnemy = CountEnemy + 1
+        end
+        if CountEnemy < 1 then
+            GetEnemyHeroes()
+        else
+            EnemyLoaded = true
+            PrintChat("Enemy Loaded")
+        end
+    end
+    if AllyLoaded == false then
+        local CountAlly = 0
+        for i, ally in pairs(AllyHeroes) do
+            CountAlly = CountAlly + 1
+        end
+        if CountAlly < 1 then
+            GetAllyHeroes()
+        else
+            AllyLoaded = true
+            PrintChat("Ally Loaded")
+            self:ActiveMenu()
+        end
+    end
+    self:Auto()
+    self:Logic()
+end
+
+function Nami:CastingChecks()
+    if not CastingQ and not CastingW and not CastingE and not CastingR then
+        return true
+    else
+        return false
+    end
+end
+
+function Nami:SmoothChecks() 
+    if self:CastingChecks() and not _G.SDK.Attack:IsActive() and _G.SDK.Cursor.Step == 0 and _G.SDK.Spell:CanTakeAction({q = 0.33, w = 0.33, e = 0.13, r = 0.63}) then
+        return true
+    else
+        return false
+    end
+end
+
+function Nami:CanUse(spell, mode)
+    if mode == nil then 
+        mode = Mode()
+    end
+
+    if spell == _Q then
+        if mode == "Combo" and IsReady(_Q) and self.Menu.combo.qcombo:Value() and self:SmoothChecks() then
+            return true
+        end
+        if mode == "Immobile" and IsReady(_Q) and self.Menu.auto.qauto:Value() and self:SmoothChecks() then
+            return true
+        end
+        if mode == "Dashing" and IsReady(_Q) and self.Menu.auto.qauto2:Value() and self:SmoothChecks() then
+             return true
+        end
+        if mode == "Interrupt" and IsReady(_Q) and self.Menu.auto.qauto3:Value() and self:SmoothChecks() then
+            return true
+        end
+    end
+    if spell == _W then
+        if mode == "Combo" and IsReady(_W) and self.Menu.combo.wcombo:Value() and self:SmoothChecks() then
+            return true
+        end
+        if mode == "Auto" and IsReady(_W) and self.Menu.auto.wauto:Value() and self:SmoothChecks() then
+            return true
+        end
+    end
+    if spell == _E then
+        if mode == "Combo" and IsReady(_E) and self.Menu.combo.ecombo:Value() and self:SmoothChecks() then
+            return true
+        end
+        if mode == "Auto" and IsReady(_E) and self.Menu.auto.eauto:Value() and self:SmoothChecks() then
+            return true
+        end
+    end
+    if spell == _R then
+        if mode == "Combo" and IsReady(_R) and self.Menu.combo.rcombo:Value() and self:SmoothChecks() then
+            return true
+        end
+        if mode == "Semi" and IsReady(_R) and self.Menu.combo.rsemi:Value() and self:SmoothChecks() then
+            return true
+        end
+    end
+    return false
+end
+
+function Nami:Logic()
+    if Mode() == "Combo" then
+        self:QCombo()
+        self:WCombo()
+        self:ECombo()
+    end
+end
+
+function Nami:Auto()
+    for i, enemy in pairs(EnemyHeroes) do 
+        self:QImmobile(enemy)
+        self:QDash(enemy)
+        self:QInterrupt(enemy)
+        self:SemiR(enemy)
+        self:SelfHeal(enemy)
+        if Mode() == "Combo" then
+            self:RCombo(enemy)
+        end
+        for j, ally in pairs(AllyHeroes) do 
+            self:WAuto(enemy, ally)
+            self:EAuto(enemy, ally)
+        end
+    end
+end
+
+-- [functions] --
+
+function Nami:QCombo()
+    local qtarget = GetTarget(QRange)
+    if ValidTarget(qtarget, QRange) and self:CanUse(_Q, "Combo") then
+        local pred = _G.PremiumPrediction:GetPrediction(myHero, qtarget, Q)
+        if pred.CastPos and GetDistance(pred.CastPos, myHero.pos) <= Q.range and pred.HitChance >= self.Menu.combo.qcombohc:Value() then
+            _G.Control.CastSpell(HK_Q, pred.CastPos)
+        end
+    end
+end
+
+function Nami:WCombo()
+    local wtarget = GetTarget(WRange)
+    if ValidTarget(wtarget, WRange) and self:CanUse(_W, "Combo") then
+        GGCast(HK_W, wtarget)
+    end
+end
+
+function Nami:ECombo()
+    if ValidTarget(target, AARange) and self:CanUse(_E, "Combo") then
+        GGCast(HK_E, myHero)
+    end
+end
+
+function Nami:RCombo(enemy)
+    local count = 0
+    if ValidTarget(enemy, RRange) and self:CanUse(_R, "Combo") then
+        for i, enemy2 in pairs(EnemyHeroes) do
+            local spellLine = ClosestPointOnLineSegment(enemy2.pos, enemy.pos, myHero.pos)
+            if GetDistance(spellLine, enemy2.pos) <= 250 then
+                count = count + 1
+            end
+        end
+        RCount = count
+        PrintChat(RCount)
+        if RCount >= self.Menu.combo.rcombocount:Value() then
+            local pred = _G.PremiumPrediction:GetPrediction(myHero, enemy, R)
+            if pred.CastPos and GetDistance(pred.CastPos, myHero.pos) <= Q.range and pred.HitChance >= self.Menu.combo.rcombohc:Value() then
+                _G.Control.CastSpell(HK_R, pred.CastPos)
+            end
+        end
+    end
+end
+
+function Nami:QImmobile(enemy)
+    if ValidTarget(enemy, QRange) and self:CanUse(_Q, "Immobile") and IsImmobile(enemy) >= 0.5 then
+        local pred = _G.PremiumPrediction:GetPrediction(myHero, enemy, Q)
+        if pred.CastPos and GetDistance(pred.CastPos, myHero.pos) <= Q.range and pred.HitChance >= 1 then
+            _G.Control.CastSpell(HK_Q, pred.CastPos)
+        end
+    end
+end
+
+function Nami:QDash(enemy)
+    if ValidTarget(enemy, QRange) and self:CanUse(_Q, "Dash") then
+        if enemy.pathing and enemy.pathing.isDashing then
+            if GetDistance(myHero.pos, enemy.pathing.endPos) < GetDistance(myHero.pos, enemy.pos) then
+                local pred = _G.PremiumPrediction:GetPrediction(myHero, enemy, Q)
+                if pred.CastPos and GetDistance(pred.CastPos, myHero.pos) <= Q.range and pred.HitChance >= 1 then
+                    _G.Control.CastSpell(HK_Q, pred.CastPos)
+                end
+            end
+        end
+    end
+end
+
+function Nami:QInterrupt(enemy)
+    local Timer = Game.Timer()
+    if ValidTarget(enemy, QRange) and self:CanUse(_Q, "Interrupt") and enemy.activeSpell.valid and not enemy.activeSpell.isStopped then
+        local t = InterruptSpells[enemy.charName]
+        if t then
+        for i = 1, #t do
+            if enemy.activeSpell.name == t[i] and enemy.activeSpell.castEndTime - Timer > 0.33 then
+                local pred = _G.PremiumPrediction:GetPrediction(myHero, enemy, Q)
+                if pred.CastPos and GetDistance(pred.CastPos, myHero.pos) <= Q.range and pred.HitChance >= 0.75 then
+                    _G.Control.CastSpell(HK_Q, pred.CastPos)
+                end
+            end
+        end
+    end
+    end
+end
+
+function Nami:WAuto(enemy, ally)
+    if ValidTarget(ally, WRange) and self:CanUse(_W, "Auto") and ally.health / ally.maxHealth <= self.Menu.auto.wautohp:Value() / 100 and self.Menu.auto.wautoallies[ally.charName]:Value() and enemy.activeSpell.valid and not enemy.activeSpell.isStopped then
+        if enemy.activeSpell.target == ally.handle then
+            GGCast(HK_W, ally)
+        else
+            local placementPos = enemy.activeSpell.placementPos
+            local width = ally.boundingRadius + 50
+            if enemy.activeSpell.width > 0 then width = width + enemy.activeSpell.width end
+            local spellLine = ClosestPointOnLineSegment(ally.pos, enemy.pos, placementPos)
+            if GetDistance(ally.pos, spellLine) <= width then
+                GGCast(HK_W, ally)
+            end
+        end
+    end
+end
+
+function Nami:SelfHeal(enemy)
+    if self:CanUse(_W, "Auto") and myHero.health / myHero.maxHealth <= self.Menu.auto.wautohp:Value() / 100 and not BuffActive(myHero, "recall") and enemy.activeSpell.valid and not enemy.activeSpell.isStopped then
+       if enemy.activeSpell.target == myHero.handle then
+            GGCast(HK_W, myHero)
+        else
+            local placementPos = enemy.activeSpell.placementPos
+            local width = myHero.boundingRadius + 50
+            if enemy.activeSpell.width > 0 then width = width + enemy.activeSpell.width end
+            local spellLine = ClosestPointOnLineSegment(myHero.pos, enemy.pos, placementPos)
+            if GetDistance(myHero.pos, spellLine) <= width then
+                GGCast(HK_W, myHero)
+            end
+        end
+    end
+end
+
+function Nami:EAuto(enemy, ally)
+    if ValidTarget(ally, ERange) and ValidTarget(enemy) and self:CanUse(_E, "Auto") and self.Menu.auto.eautoallies[ally.charName]:Value() and ally.activeSpell.valid and not ally.activeSpell.isStopped then
+        if ally.activeSpell.target == enemy.handle then
+            GGCast(HK_E, ally)
+        else
+            local placementPos = ally.activeSpell.placementPos
+            local startPos = ally.activeSpell.startPos
+            local width = enemy.boundingRadius + 75
+            if ally.activeSpell.width > 0 then width = width + ally.activeSpell.width end
+            local spellLine = ClosestPointOnLineSegment(enemy.pos, startPos, placementPos)
+            if GetDistance(enemy.pos, spellLine) <= width then
+                GGCast(HK_E, ally)
+            end
+        end
+    end
+end
+
+function Nami:SemiR(enemy)
+    if ValidTarget(enemy, RRange) and self:CanUse(_R, "Semi") and self:SmoothChecks() and GetDistance(mousePos, enemy.pos) <= 400 then
+        local pred = _G.PremiumPrediction:GetPrediction(myHero, enemy, R)
+        if pred.CastPos and GetDistance(pred.CastPos, myHero.pos) <= R.range and pred.HitChance >= 0.05 then
+            _G.Control.CastSpell(HK_R, pred.CastPos)
         end
     end
 end
